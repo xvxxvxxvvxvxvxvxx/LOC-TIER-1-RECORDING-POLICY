@@ -7,7 +7,6 @@ Write-Host "   __   ____  _____  ___  _____________  ___  ___  _____  _______  _
 Write-Host "  / /  / __ \/ ___/ / _ \/ __/ ___/ __ \/ _ \/ _ \/  _/ |/ / ___/ / _ \/ __ \/ /  /  _/ ___/\ \/ / /_  __<  /" -ForegroundColor Cyan
 Write-Host " / /__/ /_/ / /__  / , _/ _// /__/ /_/ / , _/ // // //    / (_ / / ___/ /_/ / /___/ // /__   \  /   / /  / / " -ForegroundColor Cyan
 Write-Host "/____/\____/\___/ /_/|_/___/\___/\____/_/|_/____/___/_/|_/\___/ /_/   \____/____/___/\___/   /_/   /_/  /_/  " -ForegroundColor Cyan
-Write-Host "                                                                                                              " -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Discord.gg/locx | Complete with 100% success rate" -ForegroundColor White
 Write-Host ""
@@ -19,7 +18,7 @@ Write-Host "[ Step 1 of 2 - System Check ]" -ForegroundColor Cyan
 Write-Host ""
 
 # ===============================
-# Loading Bar (# style)
+# Loading Bar
 # ===============================
 for ($i = 0; $i -le 20; $i++) {
     $percent = $i * 5
@@ -33,9 +32,10 @@ Write-Host "`n"
 # Initialize
 # ===============================
 $passedChecks = 0
-$totalChecks = 0
+$totalChecks  = 0
 
 $moduleOutput          = @()
+$cpuGpuOutput          = @()
 $processOutput         = @()
 $keyAuthOutput         = @()
 $powershellSigOutput   = @()
@@ -65,6 +65,29 @@ $moduleOutput += "SUCCESS: No unauthorized modules detected."
 $passedChecks++
 
 # ===============================
+# CPU & GPU Detections
+# ===============================
+try {
+    $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name
+    if ($cpu) {
+        $cpuGpuOutput += "SUCCESS: CPU detected -> $cpu"
+    } else {
+        $cpuGpuOutput += "WARNING: CPU detection failed."
+    }
+
+    $gpus = Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name
+    if ($gpus) {
+        foreach ($gpu in $gpus) {
+            $cpuGpuOutput += "SUCCESS: GPU detected -> $gpu"
+        }
+    } else {
+        $cpuGpuOutput += "WARNING: GPU detection failed."
+    }
+} catch {
+    $cpuGpuOutput += "WARNING: Unable to query CPU/GPU information."
+}
+
+# ===============================
 # Windows Defender Real-time Protection
 # ===============================
 $totalChecks++
@@ -81,7 +104,7 @@ try {
 }
 
 # ===============================
-# Defender Exclusions (show paths in RED)
+# Defender Exclusions
 # ===============================
 $totalChecks++
 try {
@@ -116,7 +139,7 @@ try {
 }
 
 # ===============================
-# Process Scan (suspicious keywords)
+# Process Scan
 # ===============================
 $totalChecks++
 $suspicious = @(
@@ -140,7 +163,7 @@ if (-not $foundProc) {
 }
 
 # ===============================
-# KeyAuth Cheat Folder Check
+# KeyAuth Folder Check
 # ===============================
 $totalChecks++
 try {
@@ -158,7 +181,7 @@ try {
 }
 
 # ===============================
-# PowerShell Binary Signature Check
+# PowerShell Signature
 # ===============================
 $totalChecks++
 try {
@@ -175,7 +198,7 @@ try {
 }
 
 # ===============================
-# OS Authenticity Check
+# OS Check
 # ===============================
 $totalChecks++
 try {
@@ -190,7 +213,7 @@ try {
 }
 
 # ===============================
-# Virtual Machine Detection
+# VM Detection
 # ===============================
 $totalChecks++
 $vmDetected = $false
@@ -214,7 +237,7 @@ if (-not $vmDetected) {
 }
 
 # ===============================
-# Registry MuiCache Scan
+# Registry MuiCache
 # ===============================
 $totalChecks++
 try {
@@ -256,9 +279,10 @@ function Write-Section {
 }
 
 # ===============================
-# Display Step 1 Results
+# Display Results
 # ===============================
 Write-Section "Modules" $moduleOutput
+Write-Section "CPU & GPU Detections" $cpuGpuOutput
 Write-Section "Windows Defender" $defenderOutput
 Write-Section "Defender Exclusions" $exclusionsOutput
 Write-Section "Memory Integrity" $memoryIntegrityOutput
@@ -277,7 +301,7 @@ Write-Host "Overall Success Rate: $successRate%" -ForegroundColor Cyan
 Write-Host ""
 
 # ===============================
-# Step 2: Continue
+# Step 2
 # ===============================
 Write-Host "Press Enter to continue..." -ForegroundColor Yellow
 [Console]::ReadLine() | Out-Null
@@ -286,9 +310,6 @@ Clear-Host
 Write-Host "[ Step 2 of 2 - Process Explorer ]" -ForegroundColor Cyan
 Write-Host ""
 
-# ===============================
-# Process Explorer Launch
-# ===============================
 $procDir = "$env:TEMP\ProcessExplorer"
 $procExe = "$procDir\procexp64.exe"
 $procZip = "$env:TEMP\procexp.zip"
