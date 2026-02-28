@@ -69,26 +69,18 @@ $passedChecks++
 # ===============================
 try {
     $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name
-    if ($cpu) {
-        $cpuGpuOutput += "SUCCESS: CPU detected -> $cpu"
-    } else {
-        $cpuGpuOutput += "WARNING: CPU detection failed."
-    }
+    if ($cpu) { $cpuGpuOutput += "SUCCESS: CPU detected -> $cpu" }
 
     $gpus = Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name
-    if ($gpus) {
-        foreach ($gpu in $gpus) {
-            $cpuGpuOutput += "SUCCESS: GPU detected -> $gpu"
-        }
-    } else {
-        $cpuGpuOutput += "WARNING: GPU detection failed."
+    foreach ($gpu in $gpus) {
+        $cpuGpuOutput += "SUCCESS: GPU detected -> $gpu"
     }
 } catch {
     $cpuGpuOutput += "WARNING: Unable to query CPU/GPU information."
 }
 
 # ===============================
-# Windows Defender Real-time Protection
+# Windows Defender
 # ===============================
 $totalChecks++
 try {
@@ -109,7 +101,7 @@ try {
 $totalChecks++
 try {
     $exclusions = (Get-MpPreference).ExclusionPath
-    if (-not $exclusions -or $exclusions.Count -eq 0) {
+    if (-not $exclusions) {
         $exclusionsOutput += "SUCCESS: No Defender exclusions."
         $passedChecks++
     } else {
@@ -127,7 +119,7 @@ try {
 $totalChecks++
 try {
     $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity"
-    $enabled = Get-ItemPropertyValue -Path $regPath -Name "Enabled" -ErrorAction Stop
+    $enabled = Get-ItemPropertyValue -Path $regPath -Name Enabled
     if ($enabled -eq 1) {
         $memoryIntegrityOutput += "SUCCESS: Memory Integrity enabled."
         $passedChecks++
@@ -163,13 +155,12 @@ if (-not $foundProc) {
 }
 
 # ===============================
-# KeyAuth Folder Check
+# KeyAuth Check
 # ===============================
 $totalChecks++
 try {
     $keyPath = "C:\ProgramData\KeyAuth\debug"
-    $folders = Get-ChildItem $keyPath -Directory -ErrorAction SilentlyContinue
-    if (-not $folders -or $folders.Count -eq 0) {
+    if (-not (Get-ChildItem $keyPath -Directory -ErrorAction SilentlyContinue)) {
         $keyAuthOutput += "SUCCESS: No KeyAuth cheat folders."
         $passedChecks++
     } else {
@@ -178,89 +169,6 @@ try {
 } catch {
     $keyAuthOutput += "SUCCESS: KeyAuth area clean."
     $passedChecks++
-}
-
-# ===============================
-# PowerShell Signature
-# ===============================
-$totalChecks++
-try {
-    $psPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $sig = Get-AuthenticodeSignature $psPath
-    if ($sig.Status -eq "Valid" -and $sig.SignerCertificate.Subject -like "*Microsoft*") {
-        $powershellSigOutput += "SUCCESS: PowerShell binary authentic."
-        $passedChecks++
-    } else {
-        $powershellSigOutput += "FAILURE: PowerShell binary invalid."
-    }
-} catch {
-    $powershellSigOutput += "WARNING: Binary check failed."
-}
-
-# ===============================
-# OS Check
-# ===============================
-$totalChecks++
-try {
-    if ($env:OS -eq "Windows_NT" -and (Get-CimInstance Win32_OperatingSystem)) {
-        $osOutput += "SUCCESS: OS verified."
-        $passedChecks++
-    } else {
-        $osOutput += "FAILURE: OS verification failed."
-    }
-} catch {
-    $osOutput += "FAILURE: OS check error."
-}
-
-# ===============================
-# VM Detection
-# ===============================
-$totalChecks++
-$vmDetected = $false
-try {
-    $cs = Get-WmiObject Win32_ComputerSystem
-    if ($cs.Manufacturer -match "VMware|Virtual|Microsoft" -or $cs.Model -match "Virtual|VMware|VirtualBox") { $vmDetected = $true }
-
-    $bios = Get-WmiObject Win32_BIOS
-    if ($bios.SMBIOSBIOSVersion -match "VMware|Hyper-V") { $vmDetected = $true }
-
-    if (Get-Service "*vmware*" -ErrorAction SilentlyContinue) { $vmDetected = $true }
-} catch {
-    $vmOutput += "WARNING: VM check failed."
-}
-
-if (-not $vmDetected) {
-    $vmOutput += "SUCCESS: Not running in VM."
-    $passedChecks++
-} else {
-    $vmOutput += "FAILURE: Virtual machine detected."
-}
-
-# ===============================
-# Registry MuiCache
-# ===============================
-$totalChecks++
-try {
-    $blacklist = @("matcha","isabelle","severe","matrix")
-    $mui = "HKCU:\SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache"
-    $entries = Get-ItemProperty -Path $mui -ErrorAction Stop
-    $hit = $false
-
-    foreach ($prop in $entries.PSObject.Properties) {
-        foreach ($b in $blacklist) {
-            if ($prop.Name.ToLower() -like "*$b*") {
-                $registryOutput += "FAILURE: Suspicious MuiCache entry $($prop.Name)"
-                $hit = $true
-            }
-        }
-    }
-
-    if (-not $hit) {
-        $registryOutput += "SUCCESS: No suspicious MuiCache entries detected."
-        $passedChecks++
-    }
-} catch {
-    $registryOutput += "WARNING: Unable to access MuiCache registry."
 }
 
 # ===============================
@@ -273,7 +181,6 @@ function Write-Section {
         if ($line -like "SUCCESS*") { Write-Host $line -ForegroundColor Green }
         elseif ($line -like "FAILURE*") { Write-Host $line -ForegroundColor Red }
         elseif ($line -like "WARNING*") { Write-Host $line -ForegroundColor Yellow }
-        else { Write-Host $line -ForegroundColor White }
     }
     Write-Host ""
 }
@@ -288,10 +195,6 @@ Write-Section "Defender Exclusions" $exclusionsOutput
 Write-Section "Memory Integrity" $memoryIntegrityOutput
 Write-Section "Process Scan" $processOutput
 Write-Section "KeyAuth Check" $keyAuthOutput
-Write-Section "PowerShell Binary" $powershellSigOutput
-Write-Section "OS Check" $osOutput
-Write-Section "Virtual Machine" $vmOutput
-Write-Section "Registry Scan" $registryOutput
 
 # ===============================
 # Success Rate
@@ -300,12 +203,12 @@ $successRate = [math]::Round(($passedChecks / $totalChecks) * 100)
 Write-Host "Overall Success Rate: $successRate%" -ForegroundColor Cyan
 Write-Host ""
 
-# ===============================
-# Step 2
-# ===============================
 Write-Host "Press Enter to continue..." -ForegroundColor Yellow
 [Console]::ReadLine() | Out-Null
 
+# ===============================
+# STEP 2 – PROCESS EXPLORER
+# ===============================
 Clear-Host
 Write-Host "[ Step 2 of 2 - Process Explorer ]" -ForegroundColor Cyan
 Write-Host ""
@@ -316,9 +219,23 @@ $procZip = "$env:TEMP\procexp.zip"
 $procURL = "https://download.sysinternals.com/files/ProcessExplorer.zip"
 
 if (-not (Test-Path $procExe)) {
-    if (-not (Test-Path $procDir)) { New-Item -ItemType Directory -Path $procDir | Out-Null }
+    New-Item -ItemType Directory -Path $procDir -Force | Out-Null
     Invoke-WebRequest -Uri $procURL -OutFile $procZip -UseBasicParsing
     Expand-Archive -Path $procZip -DestinationPath $procDir -Force
 }
 
-Start-Process -FilePath $procExe -ArgumentList "/accepteula"
+Write-Host "Launching Process Explorer..." -ForegroundColor Green
+Write-Host ""
+
+$proc = Start-Process -FilePath $procExe -ArgumentList "/accepteula" -PassThru
+Wait-Process -Id $proc.Id
+
+Write-Host ""
+Write-Host "Process Explorer closed." -ForegroundColor Cyan
+Write-Host "Press Enter to exit..." -ForegroundColor Yellow
+[Console]::ReadLine() | Out-Null
+
+# ===============================
+# FULL POWERSHELL CLOSE
+# ===============================
+Stop-Process -Id $PID
